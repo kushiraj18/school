@@ -59,10 +59,6 @@ def predict_intent(text):
 # -----------------------------
 # ROUTES
 # -----------------------------
-@app.route("/")
-def home():
-    return "School Student API is Running 🚀"
-
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
@@ -70,10 +66,10 @@ def chat():
     if not data:
         return jsonify({"error": "No JSON data received"}), 400
 
-    student_id = data.get("student_id")
+    student_id = str(data.get("student_id", "")).strip()
     user_query = data.get("message", "").strip()
-    student_class = data.get("class", "").strip().upper()
-    student_section = data.get("section", "").strip().upper()
+    student_class = str(data.get("class", "")).strip()
+    student_section = str(data.get("section", "")).strip()
 
     if not student_id:
         return jsonify({"error": "student_id is required"}), 400
@@ -83,18 +79,27 @@ def chat():
 
     intent = predict_intent(user_query)
 
-    student = collection.find_one(
-        {
-            "student_id": student_id,
-            "class": {"$regex": f"^{student_class}$", "$options": "i"} if student_class else {"$exists": True},
-            "section": {"$regex": f"^{student_section}$", "$options": "i"} if student_section else {"$exists": True}
-        },
-        {"_id": 0}
-    )
+    # 🔹 First find by student_id only
+    student = collection.find_one({"student_id": student_id}, {"_id": 0})
 
     if not student:
-        return jsonify({"reply": "Student not found. Please check student ID, class, and section."}), 404
+        return jsonify({
+            "reply": "Student not found. Please check student ID."
+        }), 404
 
+    # 🔹 If class provided, validate
+    if student_class and str(student.get("class", "")).lower() != student_class.lower():
+        return jsonify({
+            "reply": "Class does not match for this student ID."
+        }), 404
+
+    # 🔹 If section provided, validate
+    if student_section and str(student.get("section", "")).lower() != student_section.lower():
+        return jsonify({
+            "reply": "Section does not match for this student ID."
+        }), 404
+
+    # 🔹 Intent-based reply
     if intent == "attendance":
         reply = student.get("attendance", {})
     elif intent == "marks":
@@ -108,12 +113,13 @@ def chat():
     elif intent == "transport":
         reply = student.get("transport", {})
     else:
-        reply = "Sorry I couldn't understand."
+        reply = "Sorry I couldn't understand. Our agent will contact you."
 
     return jsonify({
         "intent": intent,
         "reply": reply
     })
+
 
 # -----------------------------
 # RUN FOR PRODUCTION
@@ -121,3 +127,4 @@ def chat():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+

@@ -10,10 +10,13 @@ from sklearn.naive_bayes import MultinomialNB
 app = Flask(__name__)
 
 # -----------------------------
-# MONGODB CONNECTION (USE ENV VARIABLE)
+# MONGODB CONNECTION (CORRECTED)
 # -----------------------------
-MONGO_URI = os.environ.get("mongodb+srv://kushirajkanchu04_db_user:admin@cluster0.5uw3gpu.mongodb.net/")
-#MONGO_URI = os.environ.get("MONGO_URI")
+MONGO_URI = os.environ.get("MONGO_URI")
+
+if not MONGO_URI:
+    raise ValueError("❌ MONGO_URI environment variable not set")
+
 client = MongoClient(MONGO_URI)
 db = client["shopping"]
 collection = db["Student"]
@@ -83,8 +86,8 @@ def chat():
     student = collection.find_one(
         {
             "student_id": student_id,
-            "class": {"$regex": f"^{student_class}$", "$options": "i"} if student_class else {'$exists': True},
-            "section": {"$regex": f"^{student_section}$", "$options": "i"} if student_section else {'$exists': True}
+            "class": {"$regex": f"^{student_class}$", "$options": "i"} if student_class else {"$exists": True},
+            "section": {"$regex": f"^{student_section}$", "$options": "i"} if student_section else {"$exists": True}
         },
         {"_id": 0}
     )
@@ -117,8 +120,4 @@ def chat():
 # -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-
     app.run(host="0.0.0.0", port=port)
-
-
-

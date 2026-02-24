@@ -12,8 +12,8 @@ app = Flask(__name__)
 # -----------------------------
 # MONGODB CONNECTION (USE ENV VARIABLE)
 # -----------------------------
-#MONGO_URI = os.environ.get("mongodb+srv://kushirajkanchu04_db_user:admin@cluster0.5uw3gpu.mongodb.net/")
-MONGO_URI = os.environ.get("MONGO_URI")
+MONGO_URI = os.environ.get("mongodb+srv://kushirajkanchu04_db_user:admin@cluster0.5uw3gpu.mongodb.net/")
+#MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI)
 db = client["shopping"]
 collection = db["Student"]
@@ -119,5 +119,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
 
     app.run(host="0.0.0.0", port=port)
+
 
 

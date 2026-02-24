@@ -10,7 +10,7 @@ from sklearn.naive_bayes import MultinomialNB
 app = Flask(__name__)
 
 # -----------------------------
-# MONGODB CONNECTION (CORRECTED)
+# MONGODB CONNECTION
 # -----------------------------
 MONGO_URI = os.environ.get("MONGO_URI")
 
@@ -59,13 +59,18 @@ def predict_intent(text):
 # -----------------------------
 # ROUTES
 # -----------------------------
+@app.route("/")
+def home():
+    return "School Student API is Running 🚀"
+
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.json
+    data = request.get_json()
 
     if not data:
         return jsonify({"error": "No JSON data received"}), 400
 
+    # Convert everything to string (prevents type mismatch)
     student_id = str(data.get("student_id", "")).strip()
     user_query = data.get("message", "").strip()
     student_class = str(data.get("class", "")).strip()
@@ -77,29 +82,35 @@ def chat():
     if not user_query:
         return jsonify({"error": "message is required"}), 400
 
-    intent = predict_intent(user_query)
-
-    # 🔹 First find by student_id only
-    student = collection.find_one({"student_id": student_id}, {"_id": 0})
+    # 🔹 Find student ONLY by student_id
+    student = collection.find_one(
+        {"student_id": student_id},
+        {"_id": 0}
+    )
 
     if not student:
         return jsonify({
             "reply": "Student not found. Please check student ID."
         }), 404
 
-    # 🔹 If class provided, validate
-    if student_class and str(student.get("class", "")).lower() != student_class.lower():
-        return jsonify({
-            "reply": "Class does not match for this student ID."
-        }), 404
+    # 🔹 Validate class (if provided)
+    if student_class:
+        if str(student.get("class", "")).lower() != student_class.lower():
+            return jsonify({
+                "reply": "Class does not match for this student ID."
+            }), 404
 
-    # 🔹 If section provided, validate
-    if student_section and str(student.get("section", "")).lower() != student_section.lower():
-        return jsonify({
-            "reply": "Section does not match for this student ID."
-        }), 404
+    # 🔹 Validate section (if provided)
+    if student_section:
+        if str(student.get("section", "")).lower() != student_section.lower():
+            return jsonify({
+                "reply": "Section does not match for this student ID."
+            }), 404
 
-    # 🔹 Intent-based reply
+    # 🔹 Predict intent
+    intent = predict_intent(user_query)
+
+    # 🔹 Fetch response
     if intent == "attendance":
         reply = student.get("attendance", {})
     elif intent == "marks":
@@ -120,11 +131,9 @@ def chat():
         "reply": reply
     })
 
-
 # -----------------------------
-# RUN FOR PRODUCTION
+# RUN (Render Compatible)
 # -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-

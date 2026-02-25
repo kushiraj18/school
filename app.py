@@ -1,140 +1,56 @@
-import os
 from flask import Flask, request, jsonify
 from pymongo import MongoClient
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
+import os
 
-# -----------------------------
-# FLASK APP
-# -----------------------------
 app = Flask(__name__)
 
 # -----------------------------
-# MONGODB CONNECTION
+# MongoDB Connection (Use ENV variable in Render)
 # -----------------------------
 MONGO_URI = os.environ.get("MONGO_URI")
 
-if not MONGO_URI:
-    raise ValueError("❌ MONGO_URI environment variable not set")
-
 client = MongoClient(MONGO_URI)
-db = client["shopping"]
-collection = db["Student"]
-
-print("✅ MongoDB Connected Successfully")
+db = client["schoolDB"]          # your DB name
+collection = db["students"]      # your collection name
 
 # -----------------------------
-# ML TRAINING
+# Chat Endpoint
 # -----------------------------
-training_sentences = [
-    "attendance", "my attendance", "attendance percentage",
-    "result", "results", "pass or fail",
-    "marks", "show marks", "subject marks",
-    "fees", "fee details", "pending fees",
-    "exams", "exam details", "term exam",
-    "transport", "bus details", "transport details"
-]
-
-training_labels = [
-    "attendance", "attendance", "attendance",
-    "results", "results", "results",
-    "marks", "marks", "marks",
-    "fees", "fees", "fees",
-    "exams", "exams", "exams",
-    "transport", "transport", "transport"
-]
-
-vectorizer = TfidfVectorizer(stop_words="english")
-X_train = vectorizer.fit_transform(training_sentences)
-
-model = MultinomialNB()
-model.fit(X_train, training_labels)
-
-print("✅ ML Model Trained Successfully")
-
-def predict_intent(text):
-    vec = vectorizer.transform([text.lower()])
-    return model.predict(vec)[0]
-
-# -----------------------------
-# ROUTES
-# -----------------------------
-@app.route("/")
-def home():
-    return "School Student API is Running 🚀"
-
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    if not data:
-        return jsonify({"error": "No JSON data received"}), 400
+        student_id = data.get("student_id")
+        student_class = data.get("class")
+        section = data.get("section")
+        message = data.get("message")
 
-    # Convert everything to string (prevents type mismatch)
-    student_id = str(data.get("student_id", "")).strip()
-    user_query = data.get("message", "").strip()
-    student_class = str(data.get("class", "")).strip()
-    student_section = str(data.get("section", "")).strip()
+        # 🔍 Find student
+        student = collection.find_one({
+            "student_id": str(student_id),
+            "class": str(student_class),
+            "section": str(section)
+        })
 
-    if not student_id:
-        return jsonify({"error": "student_id is required"}), 400
+        if not student:
+            return jsonify({"reply": "Student not found. Please check student ID."}), 404
 
-    if not user_query:
-        return jsonify({"error": "message is required"}), 400
-
-    # 🔹 Find student ONLY by student_id
-    student = collection.find_one(
-        {"student_id": student_id},
-        {"_id": 0}
-    )
-
-    if not student:
-        return jsonify({
-            "reply": "Student not found. Please check student ID."
-        }), 404
-
-    # 🔹 Validate class (if provided)
-    if student_class:
-        if str(student.get("class", "")).lower() != student_class.lower():
+        if message.lower() == "attendance":
+            attendance = student.get("attendance", "Not Available")
             return jsonify({
-                "reply": "Class does not match for this student ID."
-            }), 404
+                "reply": f"{student['name']}'s attendance is {attendance}"
+            }), 200
 
-    # 🔹 Validate section (if provided)
-    if student_section:
-        if str(student.get("section", "")).lower() != student_section.lower():
-            return jsonify({
-                "reply": "Section does not match for this student ID."
-            }), 404
+        return jsonify({"reply": "Invalid message"}), 400
 
-    # 🔹 Predict intent
-    intent = predict_intent(user_query)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    # 🔹 Fetch response
-    if intent == "attendance":
-        reply = student.get("attendance", {})
-    elif intent == "marks":
-        reply = student.get("marks", {})
-    elif intent == "results":
-        reply = student.get("result", {})
-    elif intent == "fees":
-        reply = student.get("fees", {})
-    elif intent == "exams":
-        reply = student.get("exams", {})
-    elif intent == "transport":
-        reply = student.get("transport", {})
-    else:
-        reply = "Sorry I couldn't understand. Our agent will contact you."
-
-    return jsonify({
-        "intent": intent,
-        "reply": reply
-    })
 
 # -----------------------------
-# RUN (Render Compatible)
+# Run for Render
 # -----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
-
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)

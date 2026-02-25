@@ -5,38 +5,57 @@ import os
 app = Flask(__name__)
 
 # -----------------------------
-# MongoDB Connection (Use ENV variable in Render)
+# MongoDB Connection
 # -----------------------------
 MONGO_URI = os.environ.get("MONGO_URI")
 
+if not MONGO_URI:
+    raise Exception("MONGO_URI not set in environment variables")
+
 client = MongoClient(MONGO_URI)
-db = client["schoolDB"]          # your DB name
-collection = db["students"]      # your collection name
+db = client["schoolDB"]       # make sure this matches your DB name
+collection = db["students"]   # make sure this matches your collection name
+
+print("✅ MongoDB Connected Successfully")
+
 
 # -----------------------------
-# Chat Endpoint
+# Root Route (IMPORTANT)
+# -----------------------------
+@app.route("/", methods=["GET"])
+def home():
+    return "School API Running Successfully 🚀", 200
+
+
+# -----------------------------
+# Chat Route
 # -----------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.get_json()
 
-        student_id = data.get("student_id")
-        student_class = data.get("class")
-        section = data.get("section")
-        message = data.get("message")
+        if not data:
+            return jsonify({"reply": "No JSON data received"}), 400
 
-        # 🔍 Find student
+        student_id = str(data.get("student_id")).strip()
+        student_class = str(data.get("class")).strip()
+        section = str(data.get("section")).strip()
+        message = str(data.get("message")).strip().lower()
+
+        # 🔍 DEBUG PRINT (check logs in Render)
+        print("Searching for:", student_id, student_class, section)
+
         student = collection.find_one({
-            "student_id": str(student_id),
-            "class": str(student_class),
-            "section": str(section)
+            "student_id": student_id,
+            "class": student_class,
+            "section": section
         })
 
         if not student:
-            return jsonify({"reply": "Student not found. Please check student ID."}), 404
+            return jsonify({"reply": "Student not found"}), 404
 
-        if message.lower() == "attendance":
+        if message == "attendance":
             attendance = student.get("attendance", "Not Available")
             return jsonify({
                 "reply": f"{student['name']}'s attendance is {attendance}"
@@ -49,7 +68,7 @@ def chat():
 
 
 # -----------------------------
-# Run for Render
+# Render Port Binding
 # -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
